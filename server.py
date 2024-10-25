@@ -32,79 +32,86 @@ def handle_client(client_socket, client_address):
             data, addr = client_socket.recvfrom(1024)
             if not data:
                 break
-            print('Получено:', data.decode())
+            print('Получено:', data.decode('UTF-8'))
 
             # Обрабатываем команду
-            if data.decode().startswith('defgetcb'):
-                response = 'okdefisd'
-                client_socket.sendto(response.encode(), client_address)
+            if data.decode('UTF-8') == "/c":
+                response = 'ok'
+                client_socket.sendto(response.encode('UTF-8'), client_address)
 
-            elif data.decode().startswith("/check"):
-                com, ip = data.decode().split()
+            elif data.decode('UTF-8').startswith("/acc_log_or_reg-=S=-"):
+                com, pc = data.decode('UTF-8').split("-=S=-")
                 conn, cursor = get_c_c()
-                cursor.execute("SELECT IP FROM users WHERE IP=?", (ip,))
+                cursor.execute("SELECT nick FROM users WHERE pc = ?", (pc,))
+                f = cursor.fetchone()
+                if f is None:
+                    response = "no"
+                else:
+                    response = "ok"
+                client_socket.sendto(response.encode('UTF-8'), client_address)
+
+
+            elif data.decode('UTF-8').startswith("/check"):
+                com, n, p, pc = data.decode('UTF-8').split("-=S=-")
+                conn, cursor = get_c_c()
+                cursor.execute("SELECT nick FROM users WHERE nick=? AND password=?", (n, p,))
                 res = cursor.fetchone()
                 if res:
-                    if ip == res[0]:
-                        print(res)
-                        response = f"auth {ip} ok"
-                        print("ok")
-                        client_socket.sendto(response.encode(), client_address)
-                        conn.commit()
-                    else:
-                        print(res)
-                        response = f"auth {ip} failed"
-                        client_socket.sendto(response.encode(), client_address)
+                    response = "ok"
+                    print("ok")
+                    client_socket.sendto(response.encode('UTF-8'), client_address)
+                    conn.commit()
                 else:
-                    print("failed")
-                    response = f"/check {ip} failed"
-                    client_socket.sendto(response.encode(), client_address)
+                    print(res)
+                    response = f"auth failed"
+                    client_socket.sendto(response.encode('UTF-8'), client_address)
+
             elif data.decode().startswith("/set"):
-                com, ip3, v, da = data.decode().split(":")
+                com, v, da, n = data.decode('UTF-8').split("-=S=-")
                 conn, cursor = get_c_c()
-                cursor.execute(f"UPDATE users SET {v} = ? WHERE IP = ?", (da, ip3,))
+                cursor.execute(f"UPDATE users SET {v} = ? WHERE nick = ?", (da, n))
                 conn.commit()
                 response = "ok"
-                client_socket.sendto(response.encode(), client_address)
+                client_socket.sendto(response.encode('UTF-8'), client_address)
 
             elif data.decode().startswith("/add_acc"):
                 conn, cursor = get_c_c()
-                com, n1, p1, ip1 = data.decode().split()
-                cursor.execute("INSERT INTO users (nick, password, IP) VALUES (?, ?, ?)", (n1, p1, ip1))
+                com, n1, p1, ip1, pc = data.decode('UTF-8').split("-=S=-")
+                cursor.execute("INSERT INTO users (nick, password, IP, pc) VALUES (?, ?, ?, ?)", (n1, p1, ip1, pc))
                 conn.commit()
-                response = f"reg {ip1} ok"
-                client_socket.sendto(response.encode(), client_address)
+                response = f"ok"
+                client_socket.sendto(response.encode('UTF-8'), client_address)
 
             elif data.decode().startswith("/get_settings"):
-                com, ip2 = data.decode().split()
+                com, n = data.decode('UTF-8').split("-=S=-")
                 conn, cursor = get_c_c()
-                cursor.execute("SELECT nick, desc FROM users WHERE IP =?", (ip2,))
+                cursor.execute("SELECT desc FROM users WHERE nick = ?", (n,))
                 res1 = cursor.fetchone()
                 if res1:    
-                    response = f"/get_settings:{res1[0]}:{res1[1]}"
-                    client_socket.sendto(response.encode(), client_address)
+                    response = f"/get_settings-=S=-{n}-=S=-{res1[0]}"
+                    print(response)
+                    client_socket.sendto(response.encode('UTF-8'), client_address)
+                    conn.commit()
 
             elif data.decode().startswith("/text"):
                 print("/text")
-                com, ip4, m = data.decode().split("-=S=-")
+                com, n, m = data.decode('UTF-8').split("-=S=-")
                 conn, cursor = get_c_c()
-                cursor.execute("SELECT nick FROM users WHERE IP =?", (ip4,))
-                f = cursor.fetchone()[0]
-                response = f"/text-=S=-{f}: {m}"
+                response = f"/text-=S=-{n}: {m}"
                 with open("msgs.txt", "a") as fi:
-                    fi.write(f"{f}:{m}\n")
+                    fi.write(f"{n}: {m}\n")
                 for a in clients:
-                    client_socket.sendto(response.encode(), a)
+                    client_socket.sendto(response.encode('UTF-8'), a)
                 print(client_address)
             
             elif data.decode().startswith("/getmsgs"):
                 print("/getmsgs")
-                com, ip5 = data.decode().split(":")
+                com, n = data.decode('UTF-8').split(":")
                 with open("msgs.txt", "r") as fi:
                     d = [line.strip() for line in fi]
 
                 for a in clients:
-                    client_socket.sendall(json.dumps(d).encode())
+                    client_socket.sendall(json.dumps(d).encode('UTF-8'), client_address)
                     
 
             else:
@@ -138,3 +145,4 @@ if __name__ == "__main__":
         # Создаем новый поток для обработки клиента
         client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
         client_thread.start()
+
